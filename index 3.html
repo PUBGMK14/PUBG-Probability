@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>모배 확률 계산기</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:      #0a0c0f;
+      --panel:   #0f1318;
+      --border:  #2a3540;
+      --accent:  #c8a84b;
+      --accent2: #4b8fc8;
+      --text:    #d4dde6;
+      --dim:     #5a6a7a;
+      --danger:  #c84b4b;
+      --green:   #4bc87a;
+      --red:     #e05c5c;
+      --mono:    'Share Tech Mono', monospace;
+      --sans:    'Rajdhani', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 0;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(200,168,75,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(200,168,75,.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px);
+      pointer-events: none;
+    }
+
+    /* ── Panel ── */
+    .panel {
+      position: relative;
+      width: min(520px, 96vw);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 30px 26px 26px;
+      animation: fadeIn .5s ease;
+    }
+    .panel::before, .panel::after,
+    .panel .cbr, .panel .cbl {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      border-color: var(--accent);
+      border-style: solid;
+    }
+    .panel::before { top:-1px;    left:-1px;   border-width: 2px 0 0 2px; }
+    .panel::after  { top:-1px;    right:-1px;  border-width: 2px 2px 0 0; }
+    .panel .cbl    { bottom:-1px; left:-1px;   border-width: 0 0 2px 2px; }
+    .panel .cbr    { bottom:-1px; right:-1px;  border-width: 0 2px 2px 0; }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .helmet-wrap { flex-shrink: 0; }
+    .badge { font-family: var(--mono); font-size: 10px; letter-spacing: .15em; color: var(--accent); margin-bottom: 4px; }
+    h1 { font-size: 21px; font-weight: 700; letter-spacing: .05em; color: #fff; line-height: 1.1; }
+    .sub { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 3px; }
+
+    /* ── Field label ── */
+    .flabel {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .12em;
+      color: var(--dim);
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+
+    /* ── Two-col input ── */
+    .input-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .input-col {}
+    .input-wrap { position: relative; }
+    .input-wrap input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 19px;
+      padding: 10px 42px 10px 12px;
+      outline: none;
+      transition: border-color .2s;
+      appearance: textfield;
+      -moz-appearance: textfield;
+    }
+    .input-wrap input::-webkit-inner-spin-button,
+    .input-wrap input::-webkit-outer-spin-button { -webkit-appearance: none; }
+    .input-wrap input:focus { border-color: var(--accent); }
+    .input-wrap input::placeholder { color: var(--dim); font-size: 15px; }
+    .ulabel {
+      position: absolute;
+      right: 10px; top: 50%;
+      transform: translateY(-50%);
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--accent);
+      pointer-events: none;
+    }
+
+    /* ── Chips ── */
+    .chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 16px; }
+    .chip {
+      font-family: var(--mono);
+      font-size: 11px;
+      padding: 4px 9px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      transition: all .15s;
+      letter-spacing: .03em;
+    }
+    .chip:hover  { border-color: var(--accent); color: var(--accent); }
+    .chip.active { border-color: var(--accent); background: rgba(200,168,75,.12); color: var(--accent); }
+
+    /* ── Calc btn ── */
+    .calc-btn {
+      width: 100%;
+      background: var(--accent);
+      color: #0a0c0f;
+      border: none;
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      padding: 13px;
+      cursor: pointer;
+      transition: background .15s, transform .1s;
+      margin-bottom: 14px;
+    }
+    .calc-btn:hover  { background: #d9bc6e; }
+    .calc-btn:active { transform: scale(.98); }
+
+    /* ── Error ── */
+    .error-msg { font-family: var(--mono); font-size: 11px; color: var(--danger); margin-bottom: 10px; display: none; }
+    .error-msg.show { display: block; }
+
+    /* ── Results table ── */
+    .results {
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity .3s, transform .3s;
+    }
+    .results.visible { opacity: 1; transform: none; }
+
+    /* column headers */
+    .res-header {
+      display: grid;
+      grid-template-columns: 80px 1fr 1fr;
+      gap: 0;
+      margin-bottom: 4px;
+      padding: 0 2px;
+    }
+    .res-header span {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: .12em;
+      color: var(--dim);
+      text-transform: uppercase;
+    }
+    .res-header span:nth-child(2),
+    .res-header span:nth-child(3) { text-align: center; }
+
+    /* row */
+    .res-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 1fr;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent2);
+      background: var(--bg);
+      margin-bottom: 6px;
+      overflow: hidden;
+    }
+    .res-row.c-gold   { border-left-color: var(--accent); }
+    .res-row.c-green  { border-left-color: var(--green); }
+    .res-row.c-red    { border-left-color: var(--red); }
+
+    .res-label {
+      padding: 10px 10px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .res-label .pct {
+      font-family: var(--mono);
+      font-size: 15px;
+      color: #fff;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .res-label .ptag {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--dim);
+      margin-top: 2px;
+      letter-spacing: .05em;
+    }
+
+    .res-cell {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      border-right: 1px solid var(--border);
+    }
+    .res-cell:last-child { border-right: none; }
+
+    .cell-val {
+      font-family: var(--mono);
+      font-size: 18px;
+      color: #fff;
+      white-space: nowrap;
+    }
+    .cell-val .unit { font-size: 11px; color: var(--dim); margin-left: 3px; }
+    .cell-val .ucsym { font-size: 11px; color: var(--accent); margin-right: 2px; }
+    .cell-sub {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--dim);
+      margin-top: 2px;
+      letter-spacing: .05em;
+    }
+
+    /* UC "no price" overlay */
+    .no-uc {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--dim);
+      text-align: center;
+      font-style: italic;
+      padding: 4px 0 10px;
+      display: none;
+    }
+    .no-uc.show { display: block; }
+
+    /* 100% special note */
+    .inf-note {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--dim);
+      background: rgba(224,92,92,.06);
+      border: 1px solid rgba(224,92,92,.2);
+      border-left: 3px solid var(--red);
+      padding: 8px 12px;
+      line-height: 1.7;
+      margin-bottom: 6px;
+      display: none;
+    }
+    .inf-note.show { display: block; }
+    .inf-note b { color: var(--red); }
+
+    /* sep */
+    .sep { border: none; border-top: 1px solid var(--border); margin: 4px 0 16px; }
+
+    /* notice */
+    .notice {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .07em;
+      color: var(--dim);
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      line-height: 1.8;
+    }
+    .notice b { color: var(--accent); }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: none; }
+    }
+    @keyframes rowpulse {
+      0%   { box-shadow: 0 0 0 0 rgba(200,168,75,.3); }
+      70%  { box-shadow: 0 0 0 6px rgba(200,168,75,0); }
+      100% { box-shadow: 0 0 0 0 rgba(200,168,75,0); }
+    }
+    .res-row.pulse { animation: rowpulse .4s ease; }
+  </style>
+</head>
+<body>
+<div class="panel">
+  <div class="cbl"></div>
+  <div class="cbr"></div>
+
+  <!-- ── Header ── -->
+  <div class="header">
+    <!-- PUBG Lv3 Helmet SVG -->
+    <div class="helmet-wrap">
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- shell -->
+        <ellipse cx="28" cy="27" rx="18" ry="16" fill="#3a3a2a"/>
+        <!-- visor area -->
+        <path d="M14 29 Q14 38 28 40 Q42 38 42 29 Z" fill="#1a1a14"/>
+        <!-- visor glass -->
+        <path d="M16 29 Q16 36 28 38 Q40 36 40 29 Z" fill="#2a3a4a" opacity=".9"/>
+        <path d="M18 30 Q22 35 28 36 Q34 35 38 30" stroke="#4b8fc8" stroke-width="1" fill="none" opacity=".5"/>
+        <!-- top plate -->
+        <path d="M14 27 Q14 13 28 11 Q42 13 42 27 Z" fill="#4a4a36"/>
+        <!-- center ridge -->
+        <rect x="26.5" y="11" width="3" height="16" rx="1.5" fill="#5a5a46"/>
+        <!-- side vents left -->
+        <rect x="11" y="22" width="5" height="2" rx="1" fill="#2a2a1e"/>
+        <rect x="11" y="25.5" width="5" height="2" rx="1" fill="#2a2a1e"/>
+        <!-- side vents right -->
+        <rect x="40" y="22" width="5" height="2" rx="1" fill="#2a2a1e"/>
+        <rect x="40" y="25.5" width="5" height="2" rx="1" fill="#2a2a1e"/>
+        <!-- highlight -->
+        <ellipse cx="24" cy="17" rx="5" ry="3" fill="white" opacity=".07" transform="rotate(-15 24 17)"/>
+        <!-- chin strap hint -->
+        <path d="M16 38 Q14 42 18 44 Q28 46 38 44 Q42 42 40 38" stroke="#2a2a1e" stroke-width="2" fill="none"/>
+        <!-- level 3 badge -->
+        <rect x="22" y="41" width="12" height="7" rx="1" fill="#c8a84b"/>
+        <text x="28" y="47" text-anchor="middle" font-family="'Rajdhani',sans-serif" font-weight="700" font-size="6" fill="#0a0c0f">LV.3</text>
+      </svg>
+    </div>
+    <div>
+      <div class="badge">PUBG MOBILE · CRATE DROP CALC</div>
+      <h1>모배 확률 계산기</h1>
+      <div class="sub">APOLLO CRATE · UC COST ESTIMATOR</div>
+    </div>
+  </div>
+
+  <!-- ── Inputs side by side ── -->
+  <div class="input-grid">
+    <div class="input-col">
+      <div class="flabel">획득 확률</div>
+      <div class="input-wrap">
+        <input type="number" id="probability" placeholder="0.018" min="0.0001" max="100" step="any"
+               onkeydown="if(event.key==='Enter') calculate()">
+        <span class="ulabel">%</span>
+      </div>
+    </div>
+    <div class="input-col">
+      <div class="flabel">상자 1개 가격</div>
+      <div class="input-wrap">
+        <input type="number" id="uc-price" placeholder="60" min="1" step="1"
+               onkeydown="if(event.key==='Enter') calculate()"
+               oninput="syncChips()">
+        <span class="ulabel">UC</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Chips ── -->
+  <div class="flabel" style="margin-bottom:6px">빠른 UC 선택</div>
+  <div class="chip-row" id="chips">
+    <button class="chip" onclick="setUC(30)">30</button>
+    <button class="chip" onclick="setUC(40)">40</button>
+    <button class="chip" onclick="setUC(60)">60</button>
+    <button class="chip" onclick="setUC(300)">300</button>
+    <button class="chip" onclick="setUC(400)">400</button>
+    <button class="chip" onclick="setUC(600)">600</button>
+    <button class="chip" onclick="setUC(1200)">1200</button>
+    <button class="chip" onclick="setUC(1800)">1800</button>
+  </div>
+
+  <!-- ── Button ── -->
+  <button class="calc-btn" onclick="calculate()">▶ 계산하기</button>
+  <div class="error-msg" id="error">⚠ 올바른 확률을 입력하세요 (0 초과 ~ 100 이하)</div>
+
+  <!-- ── Results ── -->
+  <div class="results" id="results">
+
+    <!-- Column headers -->
+    <div class="res-header">
+      <span>확률 구간</span>
+      <span>📦 시도 횟수</span>
+      <span>💸 UC 소비</span>
+    </div>
+
+    <!-- Average row -->
+    <div class="res-row c-gold" id="row-avg">
+      <div class="res-label">
+        <div class="pct">평균</div>
+        <div class="ptag">EXPECTED</div>
+      </div>
+      <div class="res-cell">
+        <div class="cell-val" id="val-avg">—<span class="unit">회</span></div>
+        <div class="cell-sub">기댓값</div>
+      </div>
+      <div class="res-cell" id="uc-avg">
+        <div class="cell-val">—</div>
+        <div class="cell-sub">UC 미입력</div>
+      </div>
+    </div>
+
+    <!-- 50% row -->
+    <div class="res-row" id="row-50">
+      <div class="res-label">
+        <div class="pct">50%</div>
+        <div class="ptag">MEDIAN</div>
+      </div>
+      <div class="res-cell">
+        <div class="cell-val" id="val-50">—<span class="unit">회</span></div>
+        <div class="cell-sub">2번 중 1번</div>
+      </div>
+      <div class="res-cell" id="uc-50">
+        <div class="cell-val">—</div>
+        <div class="cell-sub">UC 미입력</div>
+      </div>
+    </div>
+
+    <!-- 90% row -->
+    <div class="res-row c-green" id="row-90">
+      <div class="res-label">
+        <div class="pct">90%</div>
+        <div class="ptag">HIGH</div>
+      </div>
+      <div class="res-cell">
+        <div class="cell-val" id="val-90">—<span class="unit">회</span></div>
+        <div class="cell-sub">10번 중 9번</div>
+      </div>
+      <div class="res-cell" id="uc-90">
+        <div class="cell-val">—</div>
+        <div class="cell-sub">UC 미입력</div>
+      </div>
+    </div>
+
+    <!-- 99% row -->
+    <div class="res-row c-red" id="row-99">
+      <div class="res-label">
+        <div class="pct">99%</div>
+        <div class="ptag">≈100%</div>
+      </div>
+      <div class="res-cell">
+        <div class="cell-val" id="val-99">—<span class="unit">회</span></div>
+        <div class="cell-sub">100번 중 99번</div>
+      </div>
+      <div class="res-cell" id="uc-99">
+        <div class="cell-val">—</div>
+        <div class="cell-sub">UC 미입력</div>
+      </div>
+    </div>
+
+    <!-- 100% note -->
+    <div class="inf-note" id="inf-note">
+      <b>💡 100%는 왜 없나요?</b><br>
+      확률 게임에서 "반드시 나온다"는 보장은 없어요.<br>
+      99% 행은 <b style="color:#e8a0a0">저 횟수만큼 열면 100번 중 99번은 이미 나왔을 기준</b>이에요.<br>
+      현실적인 목표치로 참고하세요!
+    </div>
+
+  </div>
+
+  <div class="notice">
+    <b>⚠ REFERENCE ONLY</b> — 확률 통계 기반 참고값이며 실제 결과와 다를 수 있습니다.<br>
+    각 시도는 독립 시행으로 계산됩니다.
+  </div>
+</div>
+
+<script>
+  const PRESETS = [30, 40, 60, 300, 400, 600, 1200, 1800];
+
+  function setUC(val) {
+    document.getElementById('uc-price').value = val;
+    syncChips();
+  }
+
+  function syncChips() {
+    const v = parseInt(document.getElementById('uc-price').value);
+    document.querySelectorAll('.chip').forEach((c, i) => {
+      c.classList.toggle('active', PRESETS[i] === v);
+    });
+  }
+
+  function calculate() {
+    const error   = document.getElementById('error');
+    const results = document.getElementById('results');
+
+    const rawP = parseFloat(document.getElementById('probability').value);
+    const p    = rawP / 100;
+
+    if (!rawP || isNaN(p) || p <= 0 || p > 1) {
+      error.classList.add('show');
+      results.classList.remove('visible');
+      return;
+    }
+    error.classList.remove('show');
+
+    const avg   = Math.ceil(1 / p);
+    const pct50 = Math.ceil(Math.log(0.5)  / Math.log(1 - p));
+    const pct90 = Math.ceil(Math.log(0.10) / Math.log(1 - p));
+    const pct99 = Math.ceil(Math.log(0.01) / Math.log(1 - p));
+
+    const ucPrice = parseFloat(document.getElementById('uc-price').value);
+    const hasUC   = ucPrice > 0 && !isNaN(ucPrice);
+
+    setRow('val-avg', 'uc-avg', avg,   ucPrice, hasUC, 'row-avg');
+    setRow('val-50',  'uc-50',  pct50, ucPrice, hasUC, 'row-50');
+    setRow('val-90',  'uc-90',  pct90, ucPrice, hasUC, 'row-90');
+    setRow('val-99',  'uc-99',  pct99, ucPrice, hasUC, 'row-99');
+
+    // show 100% note
+    document.getElementById('inf-note').classList.add('show');
+
+    results.classList.add('visible');
+  }
+
+  function setRow(triesId, ucCellId, count, ucPrice, hasUC, rowId) {
+    // tries
+    document.getElementById(triesId).innerHTML =
+      `${count.toLocaleString()}<span class="unit">회</span>`;
+
+    // UC cell
+    const ucCell = document.getElementById(ucCellId);
+    if (hasUC) {
+      const total = Math.round(count * ucPrice);
+      ucCell.innerHTML = `
+        <div class="cell-val"><span class="ucsym">UC </span>${total.toLocaleString()}</div>
+        <div class="cell-sub">${ucPrice.toLocaleString()} × ${count.toLocaleString()}</div>`;
+    } else {
+      ucCell.innerHTML = `
+        <div class="cell-val" style="color:var(--dim);font-size:13px">—</div>
+        <div class="cell-sub">가격 미입력</div>`;
+    }
+
+    // pulse
+    const row = document.getElementById(rowId);
+    row.classList.remove('pulse');
+    void row.offsetWidth;
+    row.classList.add('pulse');
+  }
+</script>
+</body>
+</html>
