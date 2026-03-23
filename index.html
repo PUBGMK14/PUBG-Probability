@@ -489,7 +489,9 @@
   <!-- 확률 + UC 나란히 -->
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
     <div>
-      <div class="flabel">아이템 획득 확률</div>
+      <div class="flabel" style="display:flex;align-items:center;height:20px;margin-bottom:7px">
+        <span>아이템 획득 확률</span>
+      </div>
       <div class="input-wrap" style="margin-bottom:0">
         <input type="number" id="probability" placeholder="예: 0.1" min="0.0001" max="100" step="any"
                onkeydown="if(event.key==='Enter') calculate()">
@@ -497,7 +499,15 @@
       </div>
     </div>
     <div>
-      <div class="flabel">상자 1개 가격 <span style="color:#3a4a5a;font-size:9px">선택사항</span></div>
+      <div class="flabel" style="display:flex;align-items:center;justify-content:space-between;height:20px;margin-bottom:7px">
+        <span>상자 가격 <span style="color:#3a4a5a;font-size:9px">선택사항</span></span>
+        <div style="display:flex;gap:0;border:1px solid var(--border);overflow:hidden">
+          <button type="button" id="qty-1" onclick="setQty(1)"
+            style="font-family:var(--mono);font-size:10px;padding:2px 8px;border:none;background:var(--accent);color:#0a0c0f;cursor:pointer">1개</button>
+          <button type="button" id="qty-10" onclick="setQty(10)"
+            style="font-family:var(--mono);font-size:10px;padding:2px 8px;border:none;background:transparent;color:var(--dim);cursor:pointer">10개</button>
+        </div>
+      </div>
       <div class="input-wrap" style="margin-bottom:0">
         <input type="number" id="uc-price" placeholder="60" min="1" step="1"
                onkeydown="if(event.key==='Enter') calculate()"
@@ -577,9 +587,19 @@
     '그린':   { bg: 'rgba(60,180,100,.15)', text: '#70c080', border: 'rgba(60,180,100,.4)' },
   };
 
-  let sheetData    = {};   // { 상자명: [{item, grade, prob}, ...] }
+  let sheetData    = {};
   let isManual     = false;
   let selectedProb = null;
+  let ucQty        = 1; // 1개 or 10개
+
+  function setQty(q) {
+    ucQty = q;
+    document.getElementById('qty-1').style.background  = q === 1  ? 'var(--accent)' : 'transparent';
+    document.getElementById('qty-1').style.color       = q === 1  ? '#0a0c0f'       : 'var(--dim)';
+    document.getElementById('qty-10').style.background = q === 10 ? 'var(--accent)' : 'transparent';
+    document.getElementById('qty-10').style.color      = q === 10 ? '#0a0c0f'       : 'var(--dim)';
+    if (document.getElementById('results').classList.contains('visible')) calculate();
+  }
   let dataLoaded   = false;
 
   /* ══ CSV 로드 ══ */
@@ -827,8 +847,9 @@
     }
     error.classList.remove('show');
 
-    const ucPrice = parseFloat(document.getElementById('uc-price').value);
-    const hasUC   = ucPrice > 0 && !isNaN(ucPrice);
+    const ucRaw    = parseFloat(document.getElementById('uc-price').value);
+    const ucPrice  = ucQty > 1 ? ucRaw / ucQty : ucRaw; // 10개 가격이면 1개당으로 환산
+    const hasUC    = ucRaw > 0 && !isNaN(ucRaw);
 
     if (p >= 1) {
       ['avg','50','90','99'].forEach(k => setRow(k, 1, ucPrice, hasUC));
@@ -850,9 +871,10 @@
     const ucCell = document.getElementById(`uc-${key}`);
     if (hasUC) {
       const total = Math.round(count * ucPrice);
+      const perBoxLabel = ucQty > 1 ? `${ucPrice.toLocaleString()}UC×${count.toLocaleString()}` : `${ucPrice.toLocaleString()} × ${count.toLocaleString()}`;
       ucCell.innerHTML = `
         <div class="cell-val"><span class="ucsym">UC </span>${total.toLocaleString()}</div>
-        <div class="cell-sub">${ucPrice.toLocaleString()} × ${count.toLocaleString()}</div>`;
+        <div class="cell-sub">${perBoxLabel}</div>`;
     } else {
       ucCell.innerHTML = `
         <div class="cell-val" style="color:var(--dim);font-size:13px">—</div>
