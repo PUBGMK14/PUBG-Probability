@@ -564,7 +564,8 @@
 
 <script>
   const SHEET_ID = '1K2Q4loa65fnmIWM70UW4BA_bs894VUIBClE6gqUHOMU';
-  const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+  // gviz CSV는 인증 없이 공개 시트 전체를 가져옴
+  const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=확률표`;
   const PRESETS  = [30, 40, 60, 300, 400, 600, 1200, 1800];
 
   // 등급별 색상 매핑
@@ -601,85 +602,84 @@
   }
 
   /* ══ CSV 파싱 ══
-     시트 구조:
-       - 섹션 헤더: 첫 컬럼에 "■..." 포함
-       - 컬럼 헤더: 아이템 명(KR), 아이템 명(EN), 등급 색상, 확률
-       - 데이터 행: 아이템명KR, 아이템명EN, 등급, 확률%
-       - 총합 행: "총합" 텍스트
+     로직: A열에서 '아이템 명(KR)' 찾기 → 위 행 = 상자명
+     확률 컬럼은 헤더에서 '확률' 첫 번째 컬럼 사용
+     확률 데이터 없는 상자는 드롭다운 제외
   ══ */
   function parseSheet(text) {
     const rows = csvToRows(text);
     sheetData  = {};
+    const crateOrder = [];
 
-    // 컬럼 헤더 키워드
-    const HEADER_KEYWORDS = ['아이템', '등급', '확률', 'item', 'rate', 'grade'];
-    const SKIP_KEYWORDS   = ['총합', '합계', '100.00', '100%'];
-
-    let currentCrate = null;
-    const crateOrder = []; // 순서 보존용
-
-    for (const cols of rows) {
-      const c0 = (cols[0] || '').trim();
-      const c1 = (cols[1] || '').trim();
-      const c2 = (cols[2] || '').trim();
-      const c3 = (cols[3] || '').trim();
-
-      if (!c0 && !c1 && !c2 && !c3) continue; // 빈 행
-
-      // ① 섹션 헤더 감지: "■" 포함 또는 뒤따르는 컬럼이 비어있을 때
-      const hasSectionMark = c0.includes('■') || c0.includes('□') || c0.includes('◆');
-      // 첫 번째 컬럼만 채워져 있고 나머지는 비거나 날짜/타이틀 형태면 섹션 헤더로 간주
-      const looksLikeHeader = hasSectionMark ||
-        (c0 && !c1 && !c3 && !c0.includes('%') && c0.length > 3);
-
-      if (looksLikeHeader && !c3.includes('%') && isNaN(parseFloat(c3.replace('%', '')))) {
-        // 상자 이름 정제: "■앤디 캐릭터 상자 6.14(일) 11:00~" → "앤디 캐릭터 상자 6.14(일)"
-        let crateName = c0
-          .replace(/[■□◆◇▣▷◎●]/g, '')
+    // 아이템 명(KR) 헤더 행 인덱스 전부 수집
+    const sections = [];
+    for (let i = 0; i < rows.length; i++) {
+      const c0 = (rows[i][0] || '').toString().trim();
+      if (c0 === '아이템 명(KR)' || c0 === '아이템명(KR)' || c0.includes('아이템 명(KR)')) {
+        // 상자명: 바로 위 행 (비어있으면 더 위로)
+        let nameRow = i - 1;
+        while (nameRow >= 0 && !(rows[nameRow][0] || '').toString().trim()) nameRow--;
+        const rawName = nameRow >= 0 ? (rows[nameRow][0] || '').toString() : '';
+        // 정제: 특수문자, 끝 시간 제거
+        const crateName = rawName
+          .replace(/[■▣□◆◇●◎▷\[\]]/g, '')
+          .replace(/\s*\d{1,2}:\d{2}~?\s*$/, '')
+          .replace(/~\s*$/, '')
           .replace(/\s+/g, ' ')
           .trim();
-        // 날짜 뒤 시간 제거 ("11:00~" 등)
-        crateName = crateName.replace(/\s*\d{1,2}:\d{2}~?\s*$/, '').trim();
-        // "~" 뒤 잡것 제거
-        crateName = crateName.replace(/~\s*$/, '').trim();
-
-        if (crateName) {
-          currentCrate = crateName;
-          if (!sheetData[currentCrate]) {
-            sheetData[currentCrate] = [];
-            crateOrder.push(currentCrate);
-          }
-        }
-        continue;
+        if (crateName) sections.push({ crateName, headerRow: i, nameRow });
       }
-
-      // ② 컬럼 헤더 행 스킵
-      const lower = c0.toLowerCase();
-      if (HEADER_KEYWORDS.some(k => lower.includes(k))) continue;
-
-      // ③ 총합 행 스킵
-      if (SKIP_KEYWORDS.some(k => c0.includes(k) || c1.includes(k) || c3.includes(k))) continue;
-
-      // ④ 데이터 행 — 확률 파싱 (컬럼3 또는 컬럼4)
-      if (!currentCrate) continue;
-
-      // 4컬럼 구조: [KR, EN, 등급, 확률]
-      let probRaw = c3;
-      let grade   = c2;
-      let itemKR  = c0;
-
-      // 확률이 c3에 없으면 c2에서 시도 (3컬럼 구조 대비)
-      if (!probRaw && c2) { probRaw = c2; grade = ''; }
-
-      const probNum = parseFloat(probRaw.replace('%', '').trim());
-      if (isNaN(probNum) || probNum <= 0) continue;
-      // 총합(100%) 스킵
-      if (probNum >= 100) continue;
-
-      sheetData[currentCrate].push({ item: itemKR, grade, prob: probNum });
     }
 
-    // 최신 상자가 위에 오도록 역순으로 드롭다운 구성
+    // 각 섹션 데이터 파싱
+    for (let s = 0; s < sections.length; s++) {
+      const { crateName, headerRow, nameRow } = sections[s];
+      const endRow = s + 1 < sections.length ? sections[s + 1].headerRow - 2 : rows.length;
+
+      // 헤더 컬럼에서 등급/확률 인덱스 찾기
+      const hdr = rows[headerRow].map(c => (c || '').toString().trim());
+      const gradeIdx = hdr.findIndex(h => h.includes('등급'));
+      const probIdx  = hdr.findIndex(h => h === '확률' || h.startsWith('확률'));
+
+      const items = [];
+      for (let r = headerRow + 1; r < endRow; r++) {
+        const row = rows[r];
+        const c0  = (row[0] || '').toString().trim();
+        if (!c0) continue;
+        if (c0 === '총합' || c0.startsWith('*') || /^\d+\./.test(c0)) continue;
+
+        const itemKR = c0;
+        const grade  = gradeIdx !== -1 ? (row[gradeIdx] || '').toString().trim() : '';
+
+        // 확률 파싱: probIdx 우선, 없으면 전체 스캔
+        let probNum = probIdx !== -1
+          ? parseFloat((row[probIdx] || '').toString().replace('%', ''))
+          : NaN;
+
+        if (isNaN(probNum) || probNum <= 0) {
+          for (let ci = 2; ci < row.length; ci++) {
+            const n = parseFloat((row[ci] || '').toString().replace('%', ''));
+            if (!isNaN(n) && n > 0 && n < 100) { probNum = n; break; }
+          }
+        }
+
+        if (isNaN(probNum) || probNum <= 0 || probNum >= 100) continue;
+        items.push({ item: itemKR, grade, prob: probNum });
+      }
+
+      if (items.length === 0) continue; // 확률 데이터 없으면 제외
+
+      // 같은 이름 상자면 B열 날짜 붙이기
+      let key = crateName;
+      if (sheetData[key]) {
+        const bCell = (rows[nameRow] ? (rows[nameRow][1] || rows[nameRow][2] || '') : '').toString();
+        const dateM = bCell.match(/\d{4}-\d{2}-\d{2}/) || bCell.match(/\d{2,4}[.\-]\d{1,2}[.\-]\d{1,2}/);
+        key = dateM ? `${crateName} (${dateM[0]})` : `${crateName} (${crateOrder.filter(k => k === crateName || k.startsWith(crateName + ' (')).length + 1})`;
+      }
+      sheetData[key] = items;
+      crateOrder.push(key);
+    }
+
     populateCrates(crateOrder.reverse());
   }
 
